@@ -1,12 +1,8 @@
 'use strict'
 
 module.exports = async (event, context) => {
-  const result = {
-    'body': JSON.stringify(event.body),
-    'content-type': event.headers["content-type"]
-  }
-
   return context
+    .headers({"Content-Type": "text/html"})
     .status(200)
-    .succeed(result)
+    .succeed("<h1>Kijk!</h1><p>HTML!</p>")
 }

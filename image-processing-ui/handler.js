@@ -41,24 +41,48 @@ module.exports = async (event, context) => {
   </head>
   <body>
     <section id="dropZone" class="drop-zone">
-      <form id="uploadForm" action="#" method="POST" enctype="multipart/form-data">
+      <form id="uploadForm" action="#" method="POST">
         <input id="fileInput" type="file" name="file" />
-        <input type="submit" value="process image" />
+        <input type="hidden" id="base64Input" name="base64Input" required />
       </form>
     </section>
     <script>
-      let dropZone = document.getElementById("dropZone");
-      let fileInput = document.getElementById("fileInput");
-      let uploadForm = document.getElementById("uploadForm");
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const uploadForm = document.getElementById("uploadForm");
+      const base64Input = document.getElementById("base64Input");
+
+      const convertRepresentation = async (file) => {
+        console.debug(file);
+        // Promise staat toe submit uit te stellen tot omzetting is gebeurd
+        return new Promise(function(resolve) {
+          const reader = new FileReader();
+          // callback voor wanneer data omgezet is
+          // moet dit registreren voor omzetting
+          reader.onload = function(event) {
+            const base64String = event.target.result.split(',')[1];
+            base64Input.value = base64String;
+            resolve();
+          };
+          reader.readAsDataURL(file);
+        });
+      }
 
       dropZone.addEventListener("click", function () {
         console.log("clicked in the drop zone");
         fileInput.click();
       });
 
-      fileInput.addEventListener("change", function () {
+      fileInput.addEventListener("click", function(event) {
+        // verhindert dubbel vuren
+        event.stopPropagation();
+      });
+
+      fileInput.addEventListener("change", async function () {
         console.log("changed file input");
-        if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        if (file) {
+          await convertRepresentation(file);
           uploadForm.submit();
         }
       });
@@ -74,21 +98,36 @@ module.exports = async (event, context) => {
         this.classList.remove("dragover");
       });
 
-      dropZone.addEventListener("drop", function (e) {
+      dropZone.addEventListener("drop", async function (e) {
         console.log("dropped an image");
         e.preventDefault();
         e.stopPropagation();
         this.classList.remove("dragover");
 
         let file = e.dataTransfer.files[0];
+        console.debug(file);
         fileInput.files = e.dataTransfer.files;
-        uploadForm.submit();
-      }, );
+        file = fileInput.files[0];
+        if (file) {
+          await convertRepresentation(file);
+          uploadForm.submit();
+        }
+        else {
+            console.log("Not recognized as a file...");
+        }
+      });
     </script>
   </body>
 </html>`)
     }
     else {
+        // nu: hoe kan ik hier de image processing functie oproepen?
+        // moet file omzetten naar base64 voorstelling
+        // kan dan gewoon fetch gebruiken over alle filters?
+        // en eens ik base 64 van antwoord heb...
+        // maar lijkt er niet op dat ik de eigenlijke file content kan krijgen
+        // niet onlogisch, gaat terug om binaire data
+        // kan ik omzetten naar base64 voor verzenden?
         return context
             .headers({ "Content-Type": "text/html" })
             .status(200)

@@ -64,6 +64,7 @@ module.exports = async (event, context) => {
       });
 
       dropZone.addEventListener("dragover", function (e) {
+        event.preventDefault();
         console.log("dragging something over drop zone");
         this.classList.add("dragover");
       });
@@ -82,7 +83,7 @@ module.exports = async (event, context) => {
         let file = e.dataTransfer.files[0];
         fileInput.files = e.dataTransfer.files;
         uploadForm.submit();
-      });
+      }, );
     </script>
   </body>
 </html>`)

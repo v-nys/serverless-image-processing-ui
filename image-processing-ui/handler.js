@@ -2,6 +2,7 @@
 
 module.exports = async (event, context) => {
     console.debug(event);
+    console.debug(event.body);
     if (event.method === 'GET') {
         return context
             .headers({ "Content-Type": "text/html" })
@@ -21,7 +22,6 @@ module.exports = async (event, context) => {
           justify-content: center;
           text-align: center;
         }
-
         .drop-zone {
           border: 2px dashed #ccc;
           padding: 20px;
@@ -33,7 +33,6 @@ module.exports = async (event, context) => {
           justify-content: center;
           cursor: pointer;
         }
-
         .drop-zone.dragover {
           background-color: #f0f0f0;
         }
@@ -41,32 +40,14 @@ module.exports = async (event, context) => {
   </head>
   <body>
     <section id="dropZone" class="drop-zone">
-      <form id="uploadForm" action="#" method="POST">
-        <input id="fileInput" type="file" name="file" />
-        <input type="hidden" id="base64Input" name="base64Input" required />
+      <form id="uploadForm" action="#" method="POST" enctype="multipart/form-data">
+        <input id="fileInput" type="file" name="file" required />
       </form>
     </section>
     <script>
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
       const uploadForm = document.getElementById("uploadForm");
-      const base64Input = document.getElementById("base64Input");
-
-      const convertRepresentation = async (file) => {
-        console.debug(file);
-        // Promise staat toe submit uit te stellen tot omzetting is gebeurd
-        return new Promise(function(resolve) {
-          const reader = new FileReader();
-          // callback voor wanneer data omgezet is
-          // moet dit registreren voor omzetting
-          reader.onload = function(event) {
-            const base64String = event.target.result.split(',')[1];
-            base64Input.value = base64String;
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        });
-      }
 
       dropZone.addEventListener("click", function () {
         console.log("clicked in the drop zone");
@@ -82,7 +63,6 @@ module.exports = async (event, context) => {
         console.log("changed file input");
         const file = fileInput.files[0];
         if (file) {
-          await convertRepresentation(file);
           uploadForm.submit();
         }
       });
@@ -105,15 +85,13 @@ module.exports = async (event, context) => {
         this.classList.remove("dragover");
 
         let file = e.dataTransfer.files[0];
-        console.debug(file);
         fileInput.files = e.dataTransfer.files;
         file = fileInput.files[0];
         if (file) {
-          await convertRepresentation(file);
           uploadForm.submit();
         }
         else {
-            console.log("Not recognized as a file...");
+            console.warn("Enkel drag and drop van echte files is voorzien. Browserafbeeldingen omzetten naar files is technisch wel mogelijk.");
         }
       });
     </script>
@@ -121,16 +99,31 @@ module.exports = async (event, context) => {
 </html>`)
     }
     else {
-        // nu: hoe kan ik hier de image processing functie oproepen?
-        // moet file omzetten naar base64 voorstelling
-        // kan dan gewoon fetch gebruiken over alle filters?
-        // en eens ik base 64 van antwoord heb...
-        // maar lijkt er niet op dat ik de eigenlijke file content kan krijgen
-        // niet onlogisch, gaat terug om binaire data
-        // kan ik omzetten naar base64 voor verzenden?
+        const inputBase64String = event.files[0].buffer.toString('base64');
+        const filteredResult = await fetch('http://10.62.0.1:8080/function/image-processing', {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain",
+            // zou dit hier uiteraard niet hard coden
+            // kan het uit secret of uit request data halen
+            "authorization": "Bearer my-secret-pw",
+          },
+          body: inputBase64String
+        });
+        // .text() oproepen gaat niet, gebruikt buffers met beperkte grootte
+        // console.debug(await filteredResult.text());
+        // arrayBuffer levert de zuivere bytevoorstelling
+        // dus die moeten we eerst decoderen als tekst om de base64 string te krijgen
+        const arrayBuffer = await filteredResult.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        // de output in base 64, die zouden we dus kunnen chainen met extra image processing functies
+        const outputBase64String = buffer.toString('utf8');
+        // en dan moeten we de base64 string omzetten naar bytes
+        // dit is niet overbodig: base64 is iets anders dan UTF8
+        const decodedBuffer = Buffer.from(outputBase64String, 'base64');
         return context
-            .headers({ "Content-Type": "text/html" })
+            .headers({ "Content-Type": "application/octet-stream" })
             .status(200)
-            .succeed("<h1>Kijk!</h1><p>HTML!</p>")
+            .succeed(decodedBuffer);
     }
 }

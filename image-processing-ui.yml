@@ -4,7 +4,7 @@ provider:
   gateway: http://127.0.0.1:8080
 functions:
   image-processing-ui:
-    lang: node18
+    lang: node18multer
     handler: ./image-processing-ui
     image: vincentnys/image-processing-ui:latest
 

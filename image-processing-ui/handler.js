@@ -1,5 +1,13 @@
 'use strict'
 
+function getFilterUrl(filter) {
+    switch (filter) {
+        case "greyscale":
+        case "transparency":
+            return 'http://10.62.0.1:8080/function/image-processing';
+    }
+}
+
 module.exports = async (event, context) => {
     console.debug(event);
     console.debug(event.body);
@@ -42,11 +50,16 @@ module.exports = async (event, context) => {
     <section id="dropZone" class="drop-zone">
       <form id="uploadForm" action="#" method="POST" enctype="multipart/form-data">
         <input id="fileInput" type="file" name="file" required />
+        <select id="filters" name="filters" multiple>
+           <option value="transparency">transparency</option>
+           <option value="greyscale" selected>greyscale</option>
+        </select>
       </form>
     </section>
     <script>
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
+      const filterSelect = document.getElementById("filters");
       const uploadForm = document.getElementById("uploadForm");
 
       dropZone.addEventListener("click", function () {
@@ -56,6 +69,10 @@ module.exports = async (event, context) => {
 
       fileInput.addEventListener("click", function(event) {
         // verhindert dubbel vuren
+        event.stopPropagation();
+      });
+
+      filterSelect.addEventListener("click", function(event) {
         event.stopPropagation();
       });
 
@@ -99,28 +116,43 @@ module.exports = async (event, context) => {
 </html>`)
     }
     else {
-        const inputBase64String = event.files[0].buffer.toString('base64');
-        const filteredResult = await fetch('http://10.62.0.1:8080/function/image-processing', {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain",
-            // zou dit hier uiteraard niet hard coden
-            // kan het uit secret of uit request data halen
-            "authorization": "Bearer my-secret-pw",
-          },
-          body: inputBase64String
-        });
-        // .text() oproepen gaat niet, gebruikt buffers met beperkte grootte
-        // console.debug(await filteredResult.text());
-        // arrayBuffer levert de zuivere bytevoorstelling
-        // dus die moeten we eerst decoderen als tekst om de base64 string te krijgen
-        const arrayBuffer = await filteredResult.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        // de output in base 64, die zouden we dus kunnen chainen met extra image processing functies
-        const outputBase64String = buffer.toString('utf8');
+        let base64string = event.files[0].buffer.toString('base64');
+        let filters = event.body.filters;
+        // niets geselecteerd ⇒ afwezig, geef gewoon origineel terug
+        if (!filters) {
+            filters = [];
+        }
+        // één filter ⇒ string
+        if (typeof (filters) === "string") {
+            filters = [filters];
+        }
+        // merk op: eigenlijk kunnen we collectie filters dynamisch maken
+        // dan hoeft deze applicatie nooit gestopt te worden
+        // zouden ook een "telefoongids" van filters kunnen maken als serverless functie
+        for (let filter of filters) {
+            const filterUrl = getFilterUrl(filter);
+            const filteredResult = await fetch(filterUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "text/plain",
+                    // zou dit hier uiteraard niet hard coden
+                    // kan het uit secret of uit request data halen
+                    "authorization": "Bearer my-secret-pw",
+                },
+                body: base64string
+            });
+            // .text() oproepen gaat niet, gebruikt buffers met beperkte grootte
+            // console.debug(await filteredResult.text());
+            // arrayBuffer levert de zuivere bytevoorstelling
+            // dus die moeten we eerst decoderen als tekst om de base64 string te krijgen
+            const arrayBuffer = await filteredResult.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            // de output in base 64, die zouden we dus kunnen chainen met extra image processing functies
+            base64string = buffer.toString('utf8');
+        }
         // en dan moeten we de base64 string omzetten naar bytes
         // dit is niet overbodig: base64 is iets anders dan UTF8
-        const decodedBuffer = Buffer.from(outputBase64String, 'base64');
+        const decodedBuffer = Buffer.from(base64string, 'base64');
         return context
             .headers({ "Content-Type": "application/octet-stream" })
             .status(200)
